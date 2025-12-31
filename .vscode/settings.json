@@ -1,0 +1,19 @@
+{
+  // Python environment for this workspace
+  "python.defaultInterpreterPath": "D:\\Anaconda3\\envs\\cv\\python.exe",
+  "python.terminal.activateEnvironment": true,
+
+  // Pylance: reduce noise for dynamic libraries (cv2/numpy)
+  "python.analysis.typeCheckingMode": "basic",
+  "python.analysis.diagnosticSeverityOverrides": {
+    "reportAttributeAccessIssue": "none",
+    "reportGeneralTypeIssues": "none",
+    "reportOptionalMemberAccess": "none"
+  },
+
+  // Format Python on save using Ruff (extension required)
+  "[python]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "charliermarsh.ruff"
+  }
+}
