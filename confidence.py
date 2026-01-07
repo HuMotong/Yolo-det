@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from typing import Optional, Tuple
 
 import numpy as np
 import cv2
@@ -9,54 +10,117 @@ import matplotlib.pyplot as plt
 # =========================
 # Config (edit here)
 # =========================
-DOP_PATH = r"C:\Users\HMT\Documents\GitHub\dop\001_DoP.png"  # 输入：你的DoP图（png/jpg/tif都行）
-OUT_DIR = r"C:\Users\HMT\Documents\GitHub\dop"  # 输出目录
+DOP_PATH = r"C:\Users\HMT\Documents\GitHub\dop\231.png"  # input DoP image
+OUT_DIR = r"C:\Users\HMT\Documents\GitHub\dop"  # output directory
 OUT_NAME = "Fig9_confidence_analysis.png"
 
-# 你DoP图的数值语义：
-# - 若是“已经是[0,1]浮点存的tif/exr”，设为 "float01"
-# - 若是“8bit灰度(0~255)”，设为 "u8"
-# - 若是“16bit灰度(0~65535)”，设为 "u16"
+# Input format:
+# - "auto": if single-channel, treat as grayscale; if color, assume COLORMAP_JET.
+# - "gray": force grayscale conversion.
+# - "jet": decode COLORMAP_JET pseudo-color to DoP values.
+DOP_INPUT_FORMAT = "auto"  # "auto" / "gray" / "jet"
+AUTO_GRAY_TOL = 2.0  # mean absolute channel-diff threshold for auto gray check
+
+# DoP numeric range:
+# - "float01": already in [0,1] float
+# - "u8": 8-bit grayscale (0-255)
+# - "u16": 16-bit grayscale (0-65535)
 DOP_VALUE_MODE = "auto"  # "auto" / "float01" / "u8" / "u16"
 
-# DoP -> reliability 映射（物理含义：DoP越大，角度越可靠）
-# 推荐用 sigmoid：能产生“门控”效果，像论文里PUGM那种抑制/放行
+# DoP -> reliability mapping (higher DoP -> higher reliability)
 USE_SIGMOID = True
-SIGMOID_K = 12.0  # 越大越“硬门控”
-SIGMOID_TAU = 0.08  # DoP阈值（低于此更不可靠），可按数据调整
+SIGMOID_K = 12.0  # higher = harder gate
+SIGMOID_TAU = 0.08  # DoP threshold
 
-# 多尺度设置：三层 reliability map
-# Level-1: 细粒度（轻微平滑）
-# Level-2: 中尺度（更强平滑）
-# Level-3: 粗尺度（先降采样再上采样，模拟更粗的空间一致性）
+# Multi-scale settings: three reliability maps
 GAUSS_SIGMA_L1 = 0.6
-GAUSS_SIGMA_L2 = 2.0
-DOWNSAMPLE_SCALE_L3 = 0.25  # 0.25表示缩到1/4再放大回去
+GAUSS_SIGMA_L2 = 2.5
+GAUSS_SIGMA_L3 = 4.5
+DOWNSAMPLE_SCALE_L3 = 0.125  # 0.125 means downsample to 1/8 then upsample
 
-# 出图
+# JET decode (approximate inverse colormap)
+JET_DECODE_BATCH = 50000
+
+# Figure output
 FIG_DPI = 300
 SHOW_AXES = False
-COLORMAP = "jet"  # 你也可以改成 "viridis" / "turbo" / "gray"
+COLORMAP = "jet"  # also try "viridis" / "turbo" / "gray"
 
 
 # =========================
 # Utils
 # =========================
-def read_as_gray(path: str) -> np.ndarray:
-    """Read image, return float32 gray array with original numeric range kept."""
+_JET_LUT_BGR: Optional[np.ndarray] = None
+
+
+def build_jet_lut() -> np.ndarray:
+    values = np.arange(256, dtype=np.uint8).reshape(-1, 1)
+    colors = cv2.applyColorMap(values, cv2.COLORMAP_JET)
+    return colors.reshape(-1, 3).astype(np.int16)
+
+
+def get_jet_lut() -> np.ndarray:
+    global _JET_LUT_BGR
+    if _JET_LUT_BGR is None:
+        _JET_LUT_BGR = build_jet_lut()
+    return _JET_LUT_BGR
+
+
+def decode_jet_to_u8(
+    img_bgr: np.ndarray, batch_size: int = JET_DECODE_BATCH
+) -> np.ndarray:
+    """Approximate inverse of COLORMAP_JET. Returns u8 (0-255)."""
+    lut = get_jet_lut()
+    h, w = img_bgr.shape[:2]
+    pixels = img_bgr.reshape(-1, 3).astype(np.int16)
+    out = np.empty((pixels.shape[0],), dtype=np.uint8)
+
+    total = pixels.shape[0]
+    for start in range(0, total, batch_size):
+        end = min(start + batch_size, total)
+        chunk = pixels[start:end]
+        diff = chunk[:, None, :] - lut[None, :, :]
+        dist2 = (diff.astype(np.int32) ** 2).sum(axis=2)
+        out[start:end] = dist2.argmin(axis=1).astype(np.uint8)
+
+    return out.reshape(h, w)
+
+
+def is_near_gray(img_bgr: np.ndarray, tol: float = AUTO_GRAY_TOL) -> bool:
+    b = img_bgr[:, :, 0].astype(np.int16)
+    g = img_bgr[:, :, 1].astype(np.int16)
+    r = img_bgr[:, :, 2].astype(np.int16)
+    return (np.mean(np.abs(b - g)) < tol) and (np.mean(np.abs(g - r)) < tol)
+
+
+def read_dop_image(path: str, input_format: str) -> Tuple[np.ndarray, Optional[str]]:
+    """Read DoP image and return (raw_values, value_mode_override)."""
     img = cv2.imdecode(np.fromfile(path, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
     if img is None:
         raise FileNotFoundError(f"Cannot read image: {path}")
 
-    # If color, convert to gray
-    if img.ndim == 3:
-        # handle BGRA/BGR/RGB-like
-        if img.shape[2] == 4:
-            img = cv2.cvtColor(img, cv2.COLOR_BGRA2GRAY)
-        else:
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    if img.ndim == 2:
+        return img.astype(np.float32), None
 
-    return img.astype(np.float32)
+    if img.shape[2] == 4:
+        img = img[:, :, :3]
+
+    fmt = input_format.lower()
+    if fmt == "gray":
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        return gray.astype(np.float32), None
+    if fmt == "jet":
+        print("Decoding COLORMAP_JET pseudo-color...")
+        return decode_jet_to_u8(img).astype(np.float32), "u8"
+    if fmt == "auto":
+        if is_near_gray(img, AUTO_GRAY_TOL):
+            print("Auto mode: color image looks grayscale; using gray conversion.")
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            return gray.astype(np.float32), None
+        print("Auto mode: color image detected; decoding COLORMAP_JET.")
+        return decode_jet_to_u8(img).astype(np.float32), "u8"
+
+    raise ValueError(f"Unknown DOP_INPUT_FORMAT: {input_format}")
 
 
 def normalize_dop(dop_raw: np.ndarray, mode: str = "auto") -> np.ndarray:
@@ -68,12 +132,11 @@ def normalize_dop(dop_raw: np.ndarray, mode: str = "auto") -> np.ndarray:
     elif mode == "u16":
         dop = dop_raw / 65535.0
     elif mode == "auto":
-        # heuristic: if max <= 1.5 -> assume float01, else decide by dtype-like range
+        # heuristic: if max <= 1.5 -> assume float01, else decide by range
         mx = float(np.nanmax(dop_raw))
         if mx <= 1.5:
             dop = dop_raw.copy()
         else:
-            # If looks like 16-bit
             dop = dop_raw / (65535.0 if mx > 300.0 else 255.0)
     else:
         raise ValueError(f"Unknown DOP_VALUE_MODE: {mode}")
@@ -142,11 +205,13 @@ def save_figure(dop01, r1, r2, r3, c1, c2, c3, out_path: str):
         for ax in axes:
             ax.axis("off")
 
-    # one shared colorbar
-    cbar = fig.colorbar(ims[-1], ax=axes.ravel().tolist(), fraction=0.025, pad=0.02)
+    # one shared colorbar at the side
+    fig.subplots_adjust(right=0.9)
+    cax = fig.add_axes([0.92, 0.14, 0.02, 0.72])
+    cbar = fig.colorbar(ims[-1], cax=cax)
     cbar.set_label("Normalized value")
 
-    fig.tight_layout()
+    fig.tight_layout(rect=[0.0, 0.0, 0.9, 1.0])
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     fig.savefig(out_path, bbox_inches="tight")
     plt.close(fig)
@@ -156,8 +221,9 @@ def save_figure(dop01, r1, r2, r3, c1, c2, c3, out_path: str):
 # Main
 # =========================
 def main():
-    dop_raw = read_as_gray(DOP_PATH)
-    dop01 = normalize_dop(dop_raw, DOP_VALUE_MODE)
+    dop_raw, mode_override = read_dop_image(DOP_PATH, DOP_INPUT_FORMAT)
+    value_mode = mode_override or DOP_VALUE_MODE
+    dop01 = normalize_dop(dop_raw, value_mode)
 
     # base reliability
     rel0 = dop_to_reliability(dop01)
@@ -166,6 +232,7 @@ def main():
     r1 = gaussian_blur(rel0, GAUSS_SIGMA_L1)
     r2 = gaussian_blur(rel0, GAUSS_SIGMA_L2)
     r3 = down_up(rel0, DOWNSAMPLE_SCALE_L3)
+    r3 = gaussian_blur(r3, GAUSS_SIGMA_L3)
 
     # correlations
     c1 = pearson_corr(dop01, r1)
