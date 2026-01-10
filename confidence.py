@@ -34,9 +34,10 @@ SIGMOID_TAU = 0.08  # DoP threshold
 
 # Multi-scale settings: three reliability maps
 GAUSS_SIGMA_L1 = 0.6
-GAUSS_SIGMA_L2 = 2.5
-GAUSS_SIGMA_L3 = 4.5
-DOWNSAMPLE_SCALE_L3 = 0.125  # 0.125 means downsample to 1/8 then upsample
+GAUSS_SIGMA_L2 = 1.5
+GAUSS_SIGMA_L3 = 2.8
+DOWNSAMPLE_SCALE_L2 = 0.25  # 0.25 means downsample to 1/4 then upsample
+DOWNSAMPLE_SCALE_L3 = 0.0625  # 0.0625 means downsample to 1/16 then upsample
 
 # JET decode (approximate inverse colormap)
 JET_DECODE_BATCH = 50000
@@ -230,7 +231,8 @@ def main():
 
     # multi-scale (simulate different encoder levels)
     r1 = gaussian_blur(rel0, GAUSS_SIGMA_L1)
-    r2 = gaussian_blur(rel0, GAUSS_SIGMA_L2)
+    r2 = down_up(rel0, DOWNSAMPLE_SCALE_L2)
+    r2 = gaussian_blur(r2, GAUSS_SIGMA_L2)
     r3 = down_up(rel0, DOWNSAMPLE_SCALE_L3)
     r3 = gaussian_blur(r3, GAUSS_SIGMA_L3)
 
