@@ -1,6 +1,37 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mildew-seg"
+version = "0.1.0"
+description = "YOLO11-seg demo for seed mildew spot instance segmentation"
+readme = "README.md"
+requires-python = ">=3.10,<3.13"
+dependencies = [
+  "gradio>=5.0,<7",
+  "numpy>=1.24,<2",
+  "opencv-python>=4.8,<4.12",
+  "Pillow>=10",
+  "PyYAML>=6.0",
+  "ultralytics>=8.3,<9",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8",
+  "ruff>=0.9",
+]
+
+[project.scripts]
+mildew-seg = "mildew_seg.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [tool.ruff]
 line-length = 88
-target-version = "py39"
+target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
@@ -9,3 +40,6 @@ ignore = ["E203", "E501"]
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

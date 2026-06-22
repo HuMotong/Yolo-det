@@ -1,0 +1,67 @@
+paths:
+  raw_data: mildew
+  checkpoint: checkpoints/yolo11n-seg.pt
+  runs: runs
+
+data:
+  image_extensions: [".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"]
+  positive_dir: positive
+  negative_dir: negative
+  labels:
+    seed: seed
+    mildew_spot: [median, meidian, mildew_spot]
+  split:
+    train: 0.70
+    val: 0.15
+    test: 0.15
+    seed: 42
+  repair:
+    infer_seed_min_image_ratio: 0.01
+    infer_seed_min_area_ratio: 20.0
+
+tiling:
+  size: 320
+  overlap: 64
+  roi_margin: 32
+
+roi:
+  border_fraction: 0.04
+  color_distance_threshold: 45.0
+  morphology_kernel: 7
+  min_seed_area: 20000
+
+train:
+  imgsz: 1024
+  batch: 4
+  epochs: 150
+  patience: 30
+  mask_ratio: 2
+  device: 0
+  workers: 4
+  amp: true
+  mosaic: 0.0
+  mixup: 0.0
+  seed: 42
+  deterministic: true
+
+predict:
+  imgsz: 1024
+  batch: 4
+  device: 0
+  conf: 0.05
+  iou: 0.7
+  max_det: 2000
+  retina_masks: true
+  mask_alpha: 0.45
+
+decision:
+  instance_confidence: 0.25
+  mean_confidence: 0.25
+  count_threshold: 122
+  area_ratio_threshold: 0.00018
+
+calibration:
+  instance_confidences: [0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.40, 0.50]
+  mean_confidences: [0.10, 0.20, 0.25, 0.30, 0.40, 0.50]
+  count_quantiles: 25
+  area_quantiles: 25

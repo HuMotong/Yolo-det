@@ -1,10 +1,13 @@
 {
   // Python environment for this workspace
-  "python.defaultInterpreterPath": "D:\\Anaconda3\\envs\\cv\\python.exe",
+  "python.defaultInterpreterPath": "D:\\Anaconda3\\envs\\torch2.9py310\\python.exe",
   "python.terminal.activateEnvironment": true,
 
   // Pylance: reduce noise for dynamic libraries (cv2/numpy)
   "python.analysis.typeCheckingMode": "basic",
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}/src"
+  ],
   "python.analysis.diagnosticSeverityOverrides": {
     "reportAttributeAccessIssue": "none",
     "reportGeneralTypeIssues": "none",
@@ -15,5 +18,7 @@
   "[python]": {
     "editor.formatOnSave": true,
     "editor.defaultFormatter": "charliermarsh.ruff"
-  }
+  },
+  "python-envs.defaultEnvManager": "ms-python.python:conda",
+  "python-envs.defaultPackageManager": "ms-python.python:conda"
 }

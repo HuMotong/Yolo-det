@@ -21,6 +21,54 @@
       "console": "integratedTerminal",
       "justMyCode": true,
       "subProcess": true
+    },
+    {
+      "name": "Mildew: Check Data",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "mildew_seg.cli",
+      "args": ["check"],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src"
+      },
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Mildew: Prepare Dataset",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "mildew_seg.cli",
+      "args": ["prepare"],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src"
+      },
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Mildew: Train",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "mildew_seg.cli",
+      "args": ["train"],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src"
+      },
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Mildew: Gradio Demo",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "mildew_seg.cli",
+      "args": ["demo"],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src"
+      },
+      "console": "integratedTerminal"
     }
   ]
 }
